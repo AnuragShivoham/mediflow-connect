@@ -1,0 +1,29 @@
+# Node modules
+node_modules/
+frontend/node_modules/
+
+# Environment variables
+.env
+.env.*
+! .env.example
+frontend/.env
+frontend/.env.*
+backend/.env
+
+# Build outputs
+frontend/dist/
+frontend/dist-ssr/
+frontend/.output/
+frontend/.vinxi/
+frontend/.tanstack/
+frontend/.nitro/
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
