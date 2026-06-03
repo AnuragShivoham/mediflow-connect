@@ -6,10 +6,10 @@ import { TanStackRouterVite } from "@tanstack/router-plugin/vite";
 import path from "node:path";
 
 // Base path for GitHub Pages. Override with VITE_BASE if deploying elsewhere.
-const base = process.env.VITE_BASE ?? "/mediflow-connect/";
-
-export default defineConfig({
-  base,
+// In dev, always serve from "/" so the Lovable preview works.
+export default defineConfig(({ command }) => ({
+  base: command === "build" ? (process.env.VITE_BASE ?? "/mediflow-connect/") : "/",
+  server: { host: "::", port: 8080 },
   plugins: [
     TanStackRouterVite({
       routesDirectory: "./src/routes",
@@ -29,4 +29,4 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
   },
-});
+}));
