@@ -3,8 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "cd frontend && npm run dev",
-    "build": "cd frontend && npm run build",
-    "preview": "cd frontend && npm run preview"
+    "dev": "cd frontend && npx vite --host",
+    "build": "cd frontend && npx vite build",
+    "preview": "cd frontend && npx vite preview --host"
   }
 }
