@@ -1,6 +1,6 @@
 import { createFileRoute, Outlet, useNavigate, useLocation, Link } from "@tanstack/react-router";
 import { useEffect, useState, createContext, useContext } from "react";
-import { useAuth } from "@/lib/auth-context";
+import { useAuth } from "@/context/auth-context";
 import { 
   LayoutDashboard, 
   Boxes, 
