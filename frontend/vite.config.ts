@@ -9,7 +9,7 @@ import path from "node:path";
 // In dev, always serve from "/" so the Lovable preview works.
 export default defineConfig(({ command }) => ({
   base: command === "build" ? (process.env.VITE_BASE ?? "/mediflow-connect/") : "/",
-  server: { host: "::", port: 8080 },
+  server: { host: "::", port: 3000 },
   plugins: [
     TanStackRouterVite({
       routesDirectory: "./src/routes",

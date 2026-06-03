@@ -1,190 +1,255 @@
-import { Router, Request, Response } from 'express';
-import { supabaseAuth } from '../lib/auth';
-import { sql } from '../lib/db';
-import { requireAuth } from '../middleware/requireAuth';
+import { Router, Request, Response } from "express";
+import { sql } from "../lib/db";
+import { requireAuth } from "../middleware/requireAuth";
+import { sendMail, smtpConfigured } from "../lib/mailer";
+import { otpEmail } from "../lib/email-templates";
+import { generateOTP, storeOTP, consumeOTP } from "../lib/email-otp";
+import { signToken } from "../lib/jwt";
 
 export const authRoutes = Router();
 
-// POST /api/auth/signup
-authRoutes.post('/signup', async (req: Request, res: Response): Promise<void> => {
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const OTP_RE = /^\d{6}$/;
+
+async function sendOtpEmail(
+  to: string,
+  purpose: "signup" | "login"
+): Promise<void> {
+  const otp = generateOTP();
+  await storeOTP(to, otp, purpose);
+  const tpl = otpEmail(otp, purpose);
+
+  if (!smtpConfigured) {
+    console.warn(`[mail] SMTP not configured — ${purpose} code for ${to}: ${otp}`);
+    return;
+  }
+  await sendMail({ to, ...tpl });
+  console.log(`[mail] ${purpose} code sent to ${to}`);
+}
+
+// POST /api/auth/signup — step 1: send verification code
+authRoutes.post("/signup", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password, full_name, phone, role } = req.body;
-
-    if (!email || !password || !full_name || !phone || !role) {
-      res.status(400).json({ error: 'email, password, full_name, phone and role are required' });
+    const { email, full_name, phone, role } = req.body ?? {};
+    if (!email || !full_name || !phone || !role) {
+      res.status(400).json({ error: "email, full_name, phone and role are required" });
       return;
     }
-    if (!['doctor', 'mr'].includes(role)) {
-      res.status(400).json({ error: 'role must be doctor or mr' });
+    if (!EMAIL_RE.test(email)) {
+      res.status(400).json({ error: "invalid email" });
+      return;
+    }
+    if (!["doctor", "mr"].includes(role)) {
+      res.status(400).json({ error: "role must be doctor or mr" });
+      return;
+    }
+    if (typeof full_name !== "string" || full_name.trim().length < 2) {
+      res.status(400).json({ error: "full_name is too short" });
+      return;
+    }
+    if (typeof phone !== "string" || phone.replace(/\D/g, "").length < 7) {
+      res.status(400).json({ error: "phone is too short" });
       return;
     }
 
-    // 1. Create auth user
-    const { data, error } = await supabaseAuth.auth.signUp({ email, password });
-    if (error) { res.status(400).json({ error: error.message }); return; }
-    if (!data.user) { res.status(400).json({ error: 'Signup failed' }); return; }
+    const existing = await sql`
+      SELECT id FROM profiles
+      WHERE email = ${email.toLowerCase()} OR phone = ${phone}
+      LIMIT 1
+    `;
+    if (existing.length > 0) {
+      res.status(409).json({ error: "An account with this email or phone already exists" });
+      return;
+    }
 
-    // 2. Insert into profiles table
-    await sql`
+    try {
+      await sendOtpEmail(email, "signup");
+    } catch (mailErr: any) {
+      console.error(`[mail] FAILED signup OTP to ${email}:`, mailErr?.message ?? mailErr);
+      res.status(500).json({ error: `Email delivery failed: ${mailErr?.message ?? mailErr}` });
+      return;
+    }
+
+    res.json({ message: "Verification code sent" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/verify-signup — step 2: verify code, create profile, issue JWT
+authRoutes.post("/verify-signup", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, otp } = req.body ?? {};
+    if (!email || !otp) {
+      res.status(400).json({ error: "email and otp are required" });
+      return;
+    }
+    if (!EMAIL_RE.test(email) || !OTP_RE.test(otp)) {
+      res.status(400).json({ error: "invalid email or otp" });
+      return;
+    }
+
+    // We don't have the payload in the OTP (we only stored the code),
+    // so the form must re-send the signup data alongside the code.
+    const { full_name, phone, role } = req.body ?? {};
+    if (!full_name || !phone || !role || !["doctor", "mr"].includes(role)) {
+      res.status(400).json({ error: "full_name, phone and role are required" });
+      return;
+    }
+
+    const ok = await consumeOTP(email, otp, "signup");
+    if (!ok) {
+      res.status(401).json({ error: "Invalid or expired code" });
+      return;
+    }
+
+    const existing = await sql`
+      SELECT id FROM profiles
+      WHERE email = ${email.toLowerCase()} OR phone = ${phone}
+      LIMIT 1
+    `;
+    if (existing.length > 0) {
+      res.status(409).json({ error: "An account with this email or phone already exists" });
+      return;
+    }
+
+    const profiles = await sql<{ id: string; email: string; full_name: string; phone: string; role: string }[]>`
       INSERT INTO profiles (id, email, full_name, phone, role)
-      VALUES (${data.user.id}, ${email}, ${full_name}, ${phone}, ${role})
-      ON CONFLICT (id) DO NOTHING
+      VALUES (gen_random_uuid(), ${email.toLowerCase()}, ${full_name}, ${phone}, ${role})
+      RETURNING id, email, full_name, phone, role
     `;
+    const profile = profiles[0];
 
-    res.status(201).json({ message: 'Account created. Check your email to verify, then sign in.' });
+    const access_token = signToken({
+      sub: profile.id,
+      email: profile.email,
+      role: profile.role as "doctor" | "mr",
+    });
+
+    res.json({ access_token, profile });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// POST /api/auth/login — verify password, then send OTP
-authRoutes.post('/login', async (req: Request, res: Response): Promise<void> => {
+// POST /api/auth/login — step 1: send sign-in code
+authRoutes.post("/login", async (req: Request, res: Response): Promise<void> => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      res.status(400).json({ error: 'email and password are required' });
+    const { email } = req.body ?? {};
+    if (!email || !EMAIL_RE.test(email)) {
+      res.status(400).json({ error: "valid email is required" });
       return;
     }
 
-    // Step 1: Verify credentials
-    const { error: pwError } = await supabaseAuth.auth.signInWithPassword({ email, password });
-    if (pwError) { res.status(401).json({ error: 'Invalid email or password' }); return; }
-
-    // Step 2: Drop that session immediately — we require OTP before granting access
-    await supabaseAuth.auth.signOut();
-
-    // Step 3: Send OTP
-    const { error: otpError } = await supabaseAuth.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: false },
-    });
-    if (otpError) { res.status(500).json({ error: `Could not send OTP: ${otpError.message}` }); return; }
-
-    res.json({ message: 'otp_sent' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/auth/send-otp — resend OTP
-authRoutes.post('/send-otp', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email } = req.body;
-    if (!email) { res.status(400).json({ error: 'email is required' }); return; }
-
-    const { error } = await supabaseAuth.auth.signInWithOtp({
-      email,
-      options: { shouldCreateUser: false },
-    });
-    if (error) { res.status(500).json({ error: error.message }); return; }
-
-    res.json({ message: 'otp_sent' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/auth/verify-otp — verify OTP, return JWT + profile
-authRoutes.post('/verify-otp', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, token } = req.body;
-    if (!email || !token) {
-      res.status(400).json({ error: 'email and token are required' });
-      return;
-    }
-
-    const { data, error } = await supabaseAuth.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    });
-    if (error || !data.session) {
-      res.status(401).json({ error: error?.message ?? 'Invalid OTP' });
-      return;
-    }
-
-    // Fetch profile from DB
-    const profiles = await sql`
-      SELECT id, email, full_name, phone, role FROM profiles WHERE id = ${data.user!.id}
+    const profiles = await sql<{ id: string }[]>`
+      SELECT id FROM profiles WHERE email = ${email.toLowerCase()} LIMIT 1
     `;
     if (profiles.length === 0) {
-      res.status(404).json({ error: 'Profile not found. Please sign up first.' });
+      res.status(404).json({ error: "No account found with this email" });
       return;
     }
 
-    res.json({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-      profile: profiles[0],
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/auth/logout
-authRoutes.post('/logout', requireAuth, async (req: Request, res: Response): Promise<void> => {
-  try {
-    await supabaseAuth.auth.signOut();
-    res.json({ message: 'Signed out successfully' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/auth/forgot-password — send recovery OTP
-authRoutes.post('/forgot-password', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email } = req.body;
-    if (!email) { res.status(400).json({ error: 'email is required' }); return; }
-
-    const { error } = await supabaseAuth.auth.resetPasswordForEmail(email);
-    if (error) { res.status(500).json({ error: error.message }); return; }
-
-    res.json({ message: 'Recovery code sent to your email' });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /api/auth/reset-password — verify recovery OTP + set new password
-authRoutes.post('/reset-password', async (req: Request, res: Response): Promise<void> => {
-  try {
-    const { email, token, password } = req.body;
-    if (!email || !token || !password) {
-      res.status(400).json({ error: 'email, token and password are required' });
+    try {
+      await sendOtpEmail(email, "login");
+    } catch (mailErr: any) {
+      console.error(`[mail] FAILED login OTP to ${email}:`, mailErr?.message ?? mailErr);
+      res.status(500).json({ error: `Email delivery failed: ${mailErr?.message ?? mailErr}` });
       return;
     }
 
-    // Step 1: Verify recovery OTP
-    const { data, error: otpError } = await supabaseAuth.auth.verifyOtp({
-      email,
-      token,
-      type: 'recovery',
-    });
-    if (otpError || !data.session) {
-      res.status(401).json({ error: otpError?.message ?? 'Invalid or expired code' });
-      return;
-    }
-
-    // Step 2: Update password using the session from verified OTP
-    const { error: updateError } = await supabaseAuth.auth.updateUser({ password });
-    if (updateError) { res.status(500).json({ error: updateError.message }); return; }
-
-    res.json({ message: 'Password updated successfully' });
+    res.json({ message: "Sign-in code sent" });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// GET /api/auth/me — get current user profile
-authRoutes.get('/me', requireAuth, async (req: Request, res: Response): Promise<void> => {
+// POST /api/auth/send-otp — resend sign-in code (same as login step 1)
+authRoutes.post("/send-otp", async (req: Request, res: Response): Promise<void> => {
   try {
-    const profiles = await sql`
-      SELECT id, email, full_name, phone, role FROM profiles WHERE id = ${req.userId}
+    const { email } = req.body ?? {};
+    if (!email || !EMAIL_RE.test(email)) {
+      res.status(400).json({ error: "valid email is required" });
+      return;
+    }
+
+    const profiles = await sql<{ id: string }[]>`
+      SELECT id FROM profiles WHERE email = ${email.toLowerCase()} LIMIT 1
     `;
     if (profiles.length === 0) {
-      res.status(404).json({ error: 'Profile not found' });
+      res.status(404).json({ error: "No account found with this email" });
+      return;
+    }
+
+    try {
+      await sendOtpEmail(email, "login");
+    } catch (mailErr: any) {
+      console.error(`[mail] FAILED resend OTP to ${email}:`, mailErr?.message ?? mailErr);
+      res.status(500).json({ error: `Email delivery failed: ${mailErr?.message ?? mailErr}` });
+      return;
+    }
+
+    res.json({ message: "Sign-in code sent" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/verify-otp — step 2: verify sign-in code, issue JWT
+authRoutes.post("/verify-otp", async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { email, otp } = req.body ?? {};
+    if (!email || !otp) {
+      res.status(400).json({ error: "email and otp are required" });
+      return;
+    }
+    if (!EMAIL_RE.test(email) || !OTP_RE.test(otp)) {
+      res.status(400).json({ error: "invalid email or otp" });
+      return;
+    }
+
+    const ok = await consumeOTP(email, otp, "login");
+    if (!ok) {
+      res.status(401).json({ error: "Invalid or expired code" });
+      return;
+    }
+
+    const profiles = await sql<{ id: string; email: string; full_name: string; phone: string; role: string }[]>`
+      SELECT id, email, full_name, phone, role
+        FROM profiles
+       WHERE email = ${email.toLowerCase()}
+       LIMIT 1
+    `;
+    if (profiles.length === 0) {
+      res.status(404).json({ error: "Profile not found" });
+      return;
+    }
+    const profile = profiles[0];
+
+    const access_token = signToken({
+      sub: profile.id,
+      email: profile.email,
+      role: profile.role as "doctor" | "mr",
+    });
+
+    res.json({ access_token, profile });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/auth/logout — stateless JWT, so this is a no-op
+authRoutes.post("/logout", requireAuth, (_req: Request, res: Response): void => {
+  res.json({ message: "Signed out" });
+});
+
+// GET /api/auth/me — return current profile
+authRoutes.get("/me", requireAuth, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const profiles = await sql<{ id: string; email: string; full_name: string; phone: string; role: string }[]>`
+      SELECT id, email, full_name, phone, role FROM profiles WHERE id = ${req.userId} LIMIT 1
+    `;
+    if (profiles.length === 0) {
+      res.status(404).json({ error: "Profile not found" });
       return;
     }
     res.json({ profile: profiles[0] });

@@ -1,0 +1,35 @@
+[boot] SUPABASE_SERVICE_ROLE_KEY looks like a placeholder. Password-reset / admin flows will fail until you set the real key from Supabase Dashboard -> Settings -> API -> service_role (secret).
+[boot] SUPABASE_SERVICE_ROLE_KEY looks like a placeholder. Password-reset / admin flows will fail until you set the real key from Supabase Dashboard -> Settings -> API -> service_role (secret).
+Error: listen EADDRINUSE: address already in use :::5000
+    at Server.setupListenHandle [as _listen2] (node:net:2008:16)
+    at listenInCluster (node:net:2065:12)
+    at Server.listen (node:net:2170:7)
+    at app.listen (K:\Anurag\mediflow-connect\backend\node_modules\express\lib\application.js:635:24)
+    at Object.<anonymous> (K:\Anurag\mediflow-connect\backend\src\server.ts:56:5)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1830:14)
+    at Module._compile (K:\Anurag\mediflow-connect\backend\node_modules\source-map-support\source-map-support.js:568:25)
+    at Module.m._compile (C:\Users\amite\AppData\Local\Temp\ts-node-dev-hook-3115338882321641.js:69:33)
+    at node:internal/modules/cjs/loader:1961:10
+    at require.extensions..jsx.require.extensions..js (C:\Users\amite\AppData\Local\Temp\ts-node-dev-hook-3115338882321641.js:114:20)
+Error: JWT_SECRET is required in backend/.env
+    at Object.<anonymous> (K:\Anurag\mediflow-connect\backend\src\lib\jwt.ts:6:9)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1830:14)
+    at Module._compile (K:\Anurag\mediflow-connect\backend\node_modules\source-map-support\source-map-support.js:568:25)
+    at Module.m._compile (C:\Users\amite\AppData\Local\Temp\ts-node-dev-hook-3115338882321641.js:69:33)
+    at node:internal/modules/cjs/loader:1961:10
+    at require.extensions..jsx.require.extensions..js (C:\Users\amite\AppData\Local\Temp\ts-node-dev-hook-3115338882321641.js:114:20)
+    at require.extensions.<computed> (C:\Users\amite\AppData\Local\Temp\ts-node-dev-hook-3115338882321641.js:71:20)
+    at Object.nodeDevHook [as .ts] (K:\Anurag\mediflow-connect\backend\node_modules\ts-node-dev\lib\hook.js:63:13)
+    at Module.load (node:internal/modules/cjs/loader:1553:32)
+    at Module._load (node:internal/modules/cjs/loader:1355:12)
+Error: JWT_SECRET is required in backend/.env
+    at Object.<anonymous> (K:\Anurag\mediflow-connect\backend\src\lib\jwt.ts:6:9)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1830:14)
+    at Module._compile (K:\Anurag\mediflow-connect\backend\node_modules\source-map-support\source-map-support.js:568:25)
+    at Module.m._compile (C:\Users\amite\AppData\Local\Temp\ts-node-dev-hook-3115338882321641.js:69:33)
+    at node:internal/modules/cjs/loader:1961:10
+    at require.extensions..jsx.require.extensions..js (C:\Users\amite\AppData\Local\Temp\ts-node-dev-hook-3115338882321641.js:114:20)
+    at require.extensions.<computed> (C:\Users\amite\AppData\Local\Temp\ts-node-dev-hook-3115338882321641.js:71:20)
+    at Object.nodeDevHook [as .ts] (K:\Anurag\mediflow-connect\backend\node_modules\ts-node-dev\lib\hook.js:63:13)
+    at Module.load (node:internal/modules/cjs/loader:1553:32)
+    at Module._load (node:internal/modules/cjs/loader:1355:12)

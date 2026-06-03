@@ -1,38 +1,33 @@
-import { Request, Response, NextFunction } from 'express';
-import { supabaseAuth } from '../lib/auth';
+import { Request, Response, NextFunction } from "express";
+import { verifyToken, type MedFlowToken } from "../lib/jwt";
 
-// Extend Express Request to carry userId and userEmail
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       userId: string;
-      userEmail: string;
+      token: MedFlowToken;
     }
   }
 }
 
-export async function requireAuth(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): Promise<void> {
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   const header = req.headers.authorization;
-
-  if (!header || !header.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Unauthorized: missing Bearer token' });
+  if (!header || !header.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Missing or invalid Authorization header" });
     return;
   }
-
-  const token = header.slice(7);
-
-  const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
-
-  if (error || !user) {
-    res.status(401).json({ error: 'Unauthorized: invalid or expired token' });
+  const token = header.slice(7).trim();
+  if (!token) {
+    res.status(401).json({ error: "Missing token" });
     return;
   }
-
-  req.userId = user.id;
-  req.userEmail = user.email ?? '';
-  next();
+  try {
+    const payload = verifyToken(token);
+    req.userId = payload.sub;
+    req.token = payload;
+    next();
+  } catch {
+    res.status(401).json({ error: "Invalid or expired token" });
+  }
 }

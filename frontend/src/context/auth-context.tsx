@@ -16,6 +16,8 @@ interface AuthContextValue {
   session: null; // kept for interface compat — JWT stored in localStorage
   profile: Profile | null;
   loading: boolean;
+  setProfile: (p: Profile | null) => void;
+  setSession: (token: string, profile: Profile) => void;
   signOut: () => Promise<void>;
 }
 
@@ -50,8 +52,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(null);
   };
 
+  const setSession = (token: string, p: Profile) => {
+    api.setToken(token);
+    setProfile(p);
+    setUser({ id: p.id, email: p.email });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session: null, profile, loading, signOut }}>
+    <AuthContext.Provider value={{ user, session: null, profile, loading, setProfile, setSession, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -91,7 +91,7 @@ ordersRoutes.post('/', requireAuth, async (req: Request, res: Response): Promise
 // PATCH /api/orders/:id/status — update order status
 ordersRoutes.patch('/:id/status', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
     const { status } = req.body;
 
     const validStatuses = ['pending', 'accepted', 'packed', 'out_for_delivery', 'delivered', 'rejected'];

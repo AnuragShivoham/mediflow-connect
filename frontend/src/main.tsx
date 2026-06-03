@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 
 import { getRouter } from "./router";
 import { AuthProvider } from "@/context/auth-context";
+import { ThemeProvider } from "@/context/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
 import "./styles.css";
 
@@ -18,11 +19,13 @@ declare module "@tanstack/react-router" {
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RouterProvider router={router} />
-        <Toaster richColors position="top-right" />
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider defaultTheme="system" storageKey="medflow-theme">
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <RouterProvider router={router} />
+          <Toaster richColors position="top-right" />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   </React.StrictMode>
 );

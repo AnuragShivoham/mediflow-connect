@@ -81,7 +81,7 @@ inventoryRoutes.post('/', requireAuth, async (req: Request, res: Response): Prom
 // PATCH /api/inventory/:id — update item
 inventoryRoutes.patch('/:id', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     // Verify ownership
     const existing = await sql`
@@ -116,7 +116,7 @@ inventoryRoutes.patch('/:id', requireAuth, async (req: Request, res: Response): 
 // DELETE /api/inventory/:id — delete item
 inventoryRoutes.delete('/:id', requireAuth, async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const id = String(req.params.id);
 
     const existing = await sql`
       SELECT * FROM inventory_items WHERE id = ${id} AND user_id = ${req.userId}

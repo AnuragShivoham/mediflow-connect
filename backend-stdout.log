@@ -1,0 +1,30 @@
+
+> mediflow-backend@1.0.0 dev
+> ts-node-dev --respawn --transpile-only src/server.ts
+
+[INFO] 21:41:57 ts-node-dev ver. 2.0.0 (using ts-node ver. 10.9.2, typescript ver. 5.9.3)
+[ok]  MediFlow backend -> http://localhost:5000
+[INFO] 21:50:52 Restarting: K:\Anurag\mediflow-connect\backend\src\routes\auth.ts has been modified
+[ok]  MediFlow backend -> http://localhost:5000
+[INFO] 22:51:41 Restarting: K:\Anurag\mediflow-connect\backend\src\routes\auth.ts has been modified
+[ok]  MediFlow backend -> http://localhost:5000
+[INFO] 22:51:49 Restarting: K:\Anurag\mediflow-connect\backend\src\routes\auth.ts has been modified
+[ok]  MediFlow backend -> http://localhost:5000
+[INFO] 22:54:06 Restarting: K:\Anurag\mediflow-connect\backend\src\routes\auth.ts has been modified
+[ok]  MediFlow backend -> http://localhost:5000
+[INFO] 22:54:13 Restarting: K:\Anurag\mediflow-connect\backend\src\routes\auth.ts has been modified
+[ok]  MediFlow backend -> http://localhost:5000
+[INFO] 22:54:19 Restarting: K:\Anurag\mediflow-connect\backend\src\routes\auth.ts has been modified
+[ok]  MediFlow backend -> http://localhost:5000
+[INFO] 22:54:31 Restarting: K:\Anurag\mediflow-connect\backend\src\lib\email-templates.ts has been modified
+[ok]  MediFlow backend -> http://localhost:5000
+[INFO] 22:59:35 Restarting: K:\Anurag\mediflow-connect\backend\src\routes\auth.ts has been modified
+[ok]  MediFlow backend -> http://localhost:5000
+[INFO] 22:59:38 Restarting: K:\Anurag\mediflow-connect\backend\src\lib\supabase-admin.ts has been modified
+[ok]  MediFlow backend -> http://localhost:5000
+[INFO] 23:09:23 Restarting: K:\Anurag\mediflow-connect\backend\src\lib\email-templates.ts has been modified
+[ERROR] 23:09:24 Error: listen EADDRINUSE: address already in use :::5000
+[INFO] 23:09:43 Restarting: K:\Anurag\mediflow-connect\backend\src\routes\auth.ts has been modified
+[ERROR] 23:09:44 Error: JWT_SECRET is required in backend/.env
+[INFO] 23:09:45 Restarting: K:\Anurag\mediflow-connect\backend\src\middleware\requireAuth.ts has been modified
+[ERROR] 23:09:46 Error: JWT_SECRET is required in backend/.env
