@@ -79,10 +79,17 @@ function AuthenticatedLayout() {
   const [unreadOrderIds, setUnreadOrderIds] = useState<string[]>([]);
 
   useEffect(() => {
+    if (!loading && !user) {
+      navigate({ to: "/login" });
+    }
+  }, [loading, user, navigate]);
+
+  useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission();
     }
   }, []);
+
 
 const sendNativeNotification = (title: string, body: string) => {
     if ("Notification" in window && Notification.permission === "granted") {
