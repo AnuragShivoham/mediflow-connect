@@ -12,7 +12,7 @@ import {
   Edit2 
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,20 +56,12 @@ function InventoryPage() {
   // Use a unique key 'inventory-list' to avoid collision with 'inventory-mr-lookup'
   const { data: items, isLoading, error } = useQuery({
     queryKey: ["inventory-list", profile?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("inventory_items")
-        .select("*")
-        .eq("user_id", profile!.id)
-        .order("name");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>("/inventory"),
     enabled: !!profile?.id,
   });
 
   if (error) {
-    toast.error("Failed to load inventory: " + error.message);
+    toast.error("Failed to load inventory: " + (error as Error).message);
   }
 
   const filteredItems = items?.filter(item => 
@@ -79,17 +71,13 @@ function InventoryPage() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("inventory_items")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+      await api.delete("/inventory/" + id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       toast.success("Item deleted");
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error((error as Error).message),
   });
 
   return (
@@ -199,7 +187,6 @@ function InventoryForm({ onSuccess, initialData }: { onSuccess: () => void, init
     const formData = new FormData(e.currentTarget);
     
     const payload = {
-      user_id: profile!.id,
       name: formData.get("name") as string,
       quantity: parseInt(formData.get("quantity") as string),
       batch_number: formData.get("batch") as string || null,
@@ -207,15 +194,15 @@ function InventoryForm({ onSuccess, initialData }: { onSuccess: () => void, init
       low_stock_threshold: parseInt(formData.get("threshold") as string) || 10,
     };
 
-    const { error } = await supabase.from("inventory_items").insert(payload);
-    
-    setLoading(false);
-    if (error) {
-      toast.error(error.message);
-    } else {
+    try {
+      await api.post("/inventory", payload);
       toast.success("Item added successfully");
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       onSuccess();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 

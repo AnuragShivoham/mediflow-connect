@@ -11,13 +11,23 @@ import {
   Truck,
   Loader2
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — MedFlow" }] }),
   component: Dashboard,
 });
+
+type DashboardStats = {
+  totalOrders: number;
+  pendingOrders: number;
+  deliveredOrders: number;
+  lowStockCount: number;
+  recentOrders: any[];
+  upcomingDeliveries: any[];
+  inventoryAlerts: any[];
+};
 
 function Stat({ label, value, hint, Icon, tone = "primary", isLoading }: {
   label: string; value: string | number; hint?: string; Icon: React.ComponentType<{ className?: string }>;
@@ -52,54 +62,9 @@ function Dashboard() {
   const isMR = profile?.role === "mr";
   const firstName = profile?.full_name?.split(" ")[0] ?? "";
 
-  // Stats queries
-  const { data: totalOrders, isLoading: loadingOrders } = useQuery({
-    queryKey: ["stats", "orders", profile?.id],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("orders")
-        .select("*", { count: "exact", head: true })
-        .or(`doctor_id.eq.${profile!.id},mr_id.eq.${profile!.id}`);
-      return count || 0;
-    },
-    enabled: !!profile?.id,
-  });
-
-  const { data: lowStockCount, isLoading: loadingStock } = useQuery({
-    queryKey: ["stats", "low-stock", profile?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("inventory_items")
-        .select("id, quantity, low_stock_threshold")
-        .eq("user_id", profile!.id);
-      return data?.filter(i => i.quantity <= i.low_stock_threshold).length || 0;
-    },
-    enabled: !!profile?.id,
-  });
-
-  const { data: pendingOrders, isLoading: loadingPending } = useQuery({
-    queryKey: ["stats", "pending-orders", profile?.id],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("orders")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "pending")
-        .or(`doctor_id.eq.${profile!.id},mr_id.eq.${profile!.id}`);
-      return count || 0;
-    },
-    enabled: !!profile?.id,
-  });
-
-  const { data: deliveredOrders, isLoading: loadingDelivered } = useQuery({
-    queryKey: ["stats", "delivered-orders", profile?.id],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("orders")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "delivered")
-        .or(`doctor_id.eq.${profile!.id},mr_id.eq.${profile!.id}`);
-      return count || 0;
-    },
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["dashboard-stats"],
+    queryFn: () => api.get<DashboardStats>("/dashboard/stats"),
     enabled: !!profile?.id,
   });
 
@@ -127,10 +92,10 @@ function Dashboard() {
 
       {/* Bento grid */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label="Total orders" value={totalOrders ?? 0} hint="all time" Icon={ClipboardList} isLoading={loadingOrders} />
-        <Stat label="Pending" value={pendingOrders ?? 0} hint="awaiting action" Icon={CalendarClock} tone="warning" isLoading={loadingPending} />
-        <Stat label="Delivered" value={deliveredOrders ?? 0} hint="this month" Icon={CheckCircle2} tone="success" isLoading={loadingDelivered} />
-        <Stat label="Low stock" value={lowStockCount ?? 0} hint="needs reorder" Icon={AlertTriangle} tone="destructive" isLoading={loadingStock} />
+        <Stat label="Total orders" value={stats?.totalOrders ?? 0} hint="all time" Icon={ClipboardList} isLoading={isLoading} />
+        <Stat label="Pending" value={stats?.pendingOrders ?? 0} hint="awaiting action" Icon={CalendarClock} tone="warning" isLoading={isLoading} />
+        <Stat label="Delivered" value={stats?.deliveredOrders ?? 0} hint="this month" Icon={CheckCircle2} tone="success" isLoading={isLoading} />
+        <Stat label="Low stock" value={stats?.lowStockCount ?? 0} hint="needs reorder" Icon={AlertTriangle} tone="destructive" isLoading={isLoading} />
       </div>
 
       <div className="grid gap-4 md:grid-cols-6">

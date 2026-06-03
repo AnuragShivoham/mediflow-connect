@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,19 +21,17 @@ function ForgotPasswordPage() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-    // Do NOT pass redirectTo — we use the 6-digit OTP code from the email
-    // instead of the link, which avoids Gmail's link-prefetching that
-    // consumes single-use recovery tokens before the user clicks.
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
-    setSubmitting(false);
-    if (error) {
-      toast.error(error.message);
-      return;
+    try {
+      await api.post("/auth/forgot-password", { email });
+      setSent(true);
+      sessionStorage.setItem("recovery_email", email);
+      toast.success("Recovery code sent to your email.");
+      setTimeout(() => navigate({ to: "/reset-password" }), 800);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSubmitting(false);
     }
-    setSent(true);
-    sessionStorage.setItem("recovery_email", email);
-    toast.success("Recovery code sent to your email.");
-    setTimeout(() => navigate({ to: "/reset-password" }), 800);
   };
 
   return (

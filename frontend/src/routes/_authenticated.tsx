@@ -18,8 +18,8 @@ import {
   ChevronLeft,
   ChevronRight
 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -66,7 +66,7 @@ export const Route = createFileRoute("/_authenticated")({
 });
 
 function AuthenticatedLayout() {
-  const { user, profile, loading } = useAuth();
+  const { user, profile, loading, signOut } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const location = useLocation();
@@ -90,42 +90,28 @@ function AuthenticatedLayout() {
     }
   }, []);
 
-
-const sendNativeNotification = (title: string, body: string) => {
-    if ("Notification" in window && Notification.permission === "granted") {
-      new Notification(title, { body, icon: "./favicon.ico" });
-    }
-  };
+  // Poll notifications every 10s
+  const { data: notifData } = useQuery({
+    queryKey: ["notifications-unread"],
+    queryFn: () =>
+      api.get<{ unreadMessageSenders: string[]; unreadOrderIds: string[] }>(
+        "/notifications/unread"
+      ),
+    refetchInterval: 10_000,
+    enabled: !!profile?.id,
+  });
 
   useEffect(() => {
-    if (!profile?.id) return;
-    const channel = supabase
-      .channel('global-updates')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (p) => {
-          if (p.new.receiver_id === profile.id) {
-            setUnreadSenderIds(prev => Array.from(new Set([...prev, p.new.sender_id])));
-            sendNativeNotification("New Message Received", p.new.content);
-            toast("New Message", { description: p.new.content });
-          }
-          queryClient.invalidateQueries({ queryKey: ["messages"] });
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (p) => {
-          if (p.new.mr_id === profile.id) {
-            setUnreadOrderIds(prev => Array.from(new Set([...prev, p.new.id])));
-            sendNativeNotification("New Order Received!", "A new order has been placed.");
-            toast.success("New Order Received!");
-          }
-          queryClient.invalidateQueries({ queryKey: ["orders"] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [profile?.id, queryClient]);
+    if (!notifData) return;
+    setUnreadSenderIds(notifData.unreadMessageSenders ?? []);
+    setUnreadOrderIds(notifData.unreadOrderIds ?? []);
+  }, [notifData]);
 
   const clearUnreadSender = (id: string) => setUnreadSenderIds(prev => prev.filter(i => i !== id));
   const clearUnreadOrder = (id: string) => setUnreadOrderIds(prev => prev.filter(i => i !== id));
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await signOut();
     navigate({ to: "/login" });
   };
 

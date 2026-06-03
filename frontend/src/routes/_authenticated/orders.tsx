@@ -6,7 +6,7 @@ import {
   XCircle, Clock, FileText, User, ChevronRight, Info 
 } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -36,15 +36,7 @@ function OrdersPage() {
 
   const { data: orders, isLoading } = useQuery({
     queryKey: ["orders", profile?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("orders")
-        .select(`*, doctor:profiles!doctor_id(full_name, phone), mr:profiles!mr_id(full_name, phone), order_items(id, quantity, item:inventory_items(name))`)
-        .or(`doctor_id.eq.${profile!.id},mr_id.eq.${profile!.id}`)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>("/orders"),
     enabled: !!profile?.id,
   });
 
@@ -55,11 +47,9 @@ function OrdersPage() {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await supabase.from("orders").update({ 
-          status: status.toLowerCase().replace(/ /g, "_") as any,
-          delivery_timestamp: status.toLowerCase() === "delivered" ? new Date().toISOString() : undefined
-      }).eq("id", id);
-      if (error) throw error;
+      await api.patch("/orders/" + id + "/status", {
+        status: status.toLowerCase().replace(/ /g, "_"),
+      });
       return { id, status };
     },
     onSuccess: (data) => {
@@ -67,7 +57,7 @@ function OrdersPage() {
       if (data.status.toLowerCase() === "delivered") queryClient.invalidateQueries({ queryKey: ["inventory-list"] });
       if (data.status !== "Rejected") toast.success(`Order status updated to ${data.status}`);
     },
-    onError: (error) => toast.error(error.message),
+    onError: (error) => toast.error((error as Error).message),
   });
 
   return (
@@ -214,22 +204,13 @@ function NewOrderForm({ onSuccess }: { onSuccess: () => void }) {
 
   const { data: contacts } = useQuery({
     queryKey: ["contacts", profile?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("contacts").select(`contact:profiles!contact_id(id, full_name, phone)`).eq("user_id", profile!.id);
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>("/contacts"),
     enabled: !!profile?.id,
   });
 
   const { data: items, isLoading: loadingItems } = useQuery({
     queryKey: ["inventory-lookup", selectedMR],
-    queryFn: async () => {
-      if (!selectedMR) return [];
-      const { data, error } = await supabase.from("inventory_items").select("id, name, quantity, batch_number").eq("user_id", selectedMR);
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.get<any[]>("/inventory/mr/" + selectedMR),
     enabled: !!selectedMR,
   });
 
@@ -248,31 +229,21 @@ function NewOrderForm({ onSuccess }: { onSuccess: () => void }) {
     
     setLoading(true);
     const formData = new FormData(e.currentTarget);
-    const { data: order, error: orderError } = await supabase.from("orders").insert({
-        doctor_id: profile!.id,
+
+    try {
+      await api.post("/orders", {
         mr_id: selectedMR,
+        items: selectedItems.map(si => ({ inventory_item_id: si.id, quantity: si.quantity })),
         preferred_delivery_date: formData.get("date") as string || null,
         special_instructions: formData.get("instructions") as string || null,
-    }).select().single();
-
-    if (orderError) {
-      toast.error(orderError.message);
-      setLoading(false);
-      return;
-    }
-
-    const { error: itemsError } = await supabase.from("order_items").insert(selectedItems.map(si => ({
-        order_id: order.id,
-        inventory_item_id: si.id,
-        quantity: si.quantity
-    })));
-
-    setLoading(false);
-    if (itemsError) toast.error(itemsError.message);
-    else {
+      });
       toast.success("Order placed");
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       onSuccess();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
     }
   };
 

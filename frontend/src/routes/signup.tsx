@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
 import { z } from "zod";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,22 +39,15 @@ function SignupPage() {
     const parsed = schema.safeParse(form);
     if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
     setSubmitting(true);
-    const { error } = await supabase.auth.signUp({
-      email: parsed.data.email,
-      password: parsed.data.password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/dashboard`,
-        data: {
-          full_name: parsed.data.full_name,
-          phone: parsed.data.phone,
-          role: parsed.data.role,
-        },
-      },
-    });
-    setSubmitting(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Account created. Check your email to verify, then sign in.");
-    navigate({ to: "/login" });
+    try {
+      await api.post("/auth/signup", parsed.data);
+      toast.success("Account created. Check your email to verify, then sign in.");
+      navigate({ to: "/login" });
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -75,23 +68,15 @@ function SignupPage() {
               { v: "doctor", label: "Doctor", Icon: Stethoscope },
               { v: "mr", label: "M.R.", Icon: Briefcase },
             ] as const).map(({ v, label, Icon }) => (
-              <button
-                key={v}
-                type="button"
-                onClick={() => update("role", v)}
-                className={cn(
-                  "flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition",
-                  form.role === v
-                    ? "border-primary bg-secondary text-foreground shadow-soft"
-                    : "border-border bg-card hover:border-primary/40"
-                )}
-              >
+              <button key={v} type="button" onClick={() => update("role", v)}
+                className={cn("flex flex-col items-start gap-2 rounded-xl border p-4 text-left transition",
+                  form.role === v ? "border-primary bg-secondary text-foreground shadow-soft" : "border-border bg-card hover:border-primary/40"
+                )}>
                 <Icon className={cn("h-5 w-5", form.role === v ? "text-primary" : "text-muted-foreground")} />
                 <div className="font-display text-sm font-semibold">{label}</div>
               </button>
             ))}
           </div>
-
           <div className="space-y-2">
             <Label htmlFor="name">Full name</Label>
             <Input id="name" value={form.full_name} onChange={(e) => update("full_name", e.target.value)} required />
@@ -108,7 +93,6 @@ function SignupPage() {
             <Label htmlFor="password">Password</Label>
             <Input id="password" type="password" autoComplete="new-password" value={form.password} onChange={(e) => update("password", e.target.value)} required />
           </div>
-
           <Button type="submit" className="w-full" disabled={submitting}>
             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
             Create account

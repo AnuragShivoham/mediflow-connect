@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,46 +27,25 @@ function ResetPasswordPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
-    if (!/^\d{6}$/.test(code.trim())) {
-      toast.error("Enter the 6-digit code from your email");
-      return;
-    }
+    if (password !== confirmPassword) { toast.error("Passwords do not match"); return; }
+    if (password.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    if (!/^\d{6}$/.test(code.trim())) { toast.error("Enter the 6-digit code from your email"); return; }
 
     setLoading(true);
-
-    // Exchange the OTP code for a session (works even if Gmail prefetched the link,
-    // because the code in the email body is independent of the link's token).
-    const { error: otpError } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: code.trim(),
-      type: "recovery",
-    });
-
-    if (otpError) {
+    try {
+      await api.post("/auth/reset-password", {
+        email: email.trim(),
+        token: code.trim(),
+        password,
+      });
+      sessionStorage.removeItem("recovery_email");
+      toast.success("Password updated successfully");
+      navigate({ to: "/login" });
+    } catch (err: any) {
+      toast.error(err.message || "Invalid or expired code");
+    } finally {
       setLoading(false);
-      toast.error(otpError.message || "Invalid or expired code");
-      return;
     }
-
-    const { error: updateError } = await supabase.auth.updateUser({ password });
-    setLoading(false);
-
-    if (updateError) {
-      toast.error(updateError.message);
-      return;
-    }
-
-    sessionStorage.removeItem("recovery_email");
-    toast.success("Password updated successfully");
-    navigate({ to: "/dashboard" });
   };
 
   return (
@@ -92,52 +71,24 @@ function ResetPasswordPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="rounded-xl h-11"
-            />
+            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="rounded-xl h-11" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="code">6-digit recovery code</Label>
             <Input
-              id="code"
-              type="text"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              maxLength={6}
-              value={code}
-              onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-              required
-              className="rounded-xl h-11 tracking-widest text-center text-lg"
-              placeholder="••••••"
-              autoFocus
+              id="code" type="text" inputMode="numeric" autoComplete="one-time-code"
+              maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+              required className="rounded-xl h-11 tracking-widest text-center text-lg"
+              placeholder="••••••" autoFocus
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">New Password</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="rounded-xl h-11"
-            />
+            <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required className="rounded-xl h-11" />
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm New Password</Label>
-            <Input
-              id="confirmPassword"
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              className="rounded-xl h-11"
-            />
+            <Input id="confirmPassword" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required className="rounded-xl h-11" />
           </div>
 
           <Button type="submit" className="w-full mt-2 rounded-xl h-12" disabled={loading}>

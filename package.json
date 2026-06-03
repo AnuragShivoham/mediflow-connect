@@ -1,10 +1,14 @@
 {
-  "name": "mediflow-connect-root",
+  "name": "mediflow-connect",
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "dev": "cd frontend && npx vite --host",
-    "build": "cd frontend && npx vite build",
-    "preview": "cd frontend && npx vite preview --host"
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npx vite --host",
+    "dev": "npx concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "install:all": "cd frontend && npm install && cd ../backend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
   }
 }
